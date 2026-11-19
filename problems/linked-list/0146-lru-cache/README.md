@@ -61,63 +61,92 @@ module.exports = { LRUCache };
 
 完整文件：[solution-map.js](solution-map.js)。**这是 JS 刷题最省代码的版本。** `Map` 的查找、插入和删除平均 O(1)，所以 `get` / `put` 平均 O(1)，空间 O(capacity)。
 
-## 5. 解法三：Map + 双向链表（面试标准版）
+## 5. 解法三：Map + 双向链表（官方风格）
 
-为什么还需要链表？如果面试官要求你自己维护「最近使用」顺序，不依赖 JS Map 的插入顺序，可以把职责拆开：
+参考[力扣官方题解](https://leetcode.cn/problems/lru-cache/solutions/259678/lruhuan-cun-ji-zhi-by-leetcode-solution/)的结构：使用自定义 `DLinkedNode`、`Map`、虚拟头尾节点，并维护 `size`。
 
-- **Map：** `key → 节点`，平均 O(1) 定位。
-- **双向链表：** O(1) 删除已知节点并插到最前面。
+- `Map` 根据 key 平均 O(1) 找到节点。
+- 双向链表从 `head` 到 `tail` 依次为最新到最旧。
+- `get` 命中时调用 `moveToHead`。
+- `put` 已存在时更新值并移到头部；新插入超容量时调用 `removeTail`，同步删除 Map 中的 key。
 
-```text
-head ⇄ A ⇄ B ⇄ C ⇄ tail
-       最新       最旧
-```
+`DLinkedNode` 需要 `key`、`value`、`prev`、`next`。本题**不会预置可直接使用的双向链表节点类**，因此按官方思路自行定义；它不同于其他题常见的单向 `ListNode`。
 
-`head` 和 `tail` 是虚拟节点，避免处理空链表特殊情况。**不需要 LeetCode 提供的 ListNode，也不一定需要自己写 Node 类。** 本题节点是双向的，普通 JS 对象 `{ key, value, prev, next }` 就足够。普通单向链表的 `ListNode(val,next)` 不能直接完成这里的 O(1) 删除。
-
-### 三个必须掌握的操作
-
-**插入到 head 后面**：原来 `head ⇄ A`，插入 B 后变成 `head ⇄ B ⇄ A`。
+### 关键操作
 
 ```js
 addToHead(node) {
-  node.prev = this.head;       // B 左边是 head
-  node.next = this.head.next;  // B 右边是原来的 A
-  this.head.next.prev = node;  // A 左边改成 B
-  this.head.next = node;       // head 右边改成 B
+  node.prev = this.head;
+  node.next = this.head.next;
+  this.head.next.prev = node;
+  this.head.next = node;
 }
-```
 
-**删除一个已知节点**：`A ⇄ B ⇄ C` 变为 `A ⇄ C`，只改两条邻居指针。
-
-```js
 removeNode(node) {
   node.prev.next = node.next;
   node.next.prev = node.prev;
 }
-```
 
-**移到头部**：先摘掉，再插入。
-
-```js
 moveToHead(node) {
   this.removeNode(node);
   this.addToHead(node);
 }
+
+removeTail() {
+  const node = this.tail.prev;
+  this.removeNode(node);
+  return node;
+}
 ```
+
+先连接新节点和原头节点，再更新邻居指针。删除已知节点只需将前驱、后继接起来。尾部的真实节点 `tail.prev` 就是待淘汰节点。
 
 ### 完整 JavaScript 实现
 
 ```js
-// 双向链表节点用普通对象即可，不必额外定义 Node / ListNode 类。
+class DLinkedNode {
+  constructor(key = 0, value = 0) {
+    this.key = key;
+    this.value = value;
+    this.prev = null;
+    this.next = null;
+  }
+}
+
 class LRUCache {
   constructor(capacity) {
     this.capacity = capacity;
-    this.map = new Map();
-    this.head = { key: null, value: null, prev: null, next: null };
-    this.tail = { key: null, value: null, prev: null, next: null };
+    this.size = 0;
+    this.cache = new Map();
+    this.head = new DLinkedNode();
+    this.tail = new DLinkedNode();
     this.head.next = this.tail;
     this.tail.prev = this.head;
+  }
+
+  get(key) {
+    if (!this.cache.has(key)) return -1;
+    const node = this.cache.get(key);
+    this.moveToHead(node);
+    return node.value;
+  }
+
+  put(key, value) {
+    if (!this.cache.has(key)) {
+      const node = new DLinkedNode(key, value);
+      this.cache.set(key, node);
+      this.addToHead(node);
+      this.size++;
+      if (this.size > this.capacity) {
+        const removed = this.removeTail();
+        this.cache.delete(removed.key);
+        this.size--;
+      }
+    } else {
+      const node = this.cache.get(key);
+      node.value = value;
+      this.moveToHead(node);
+    }
   }
 
   addToHead(node) {
@@ -137,45 +166,17 @@ class LRUCache {
     this.addToHead(node);
   }
 
-  get(key) {
-    if (!this.map.has(key)) return -1;
-    const node = this.map.get(key);
-    this.moveToHead(node);
-    return node.value;
-  }
-
-  put(key, value) {
-    if (this.map.has(key)) {
-      const node = this.map.get(key);
-      node.value = value;
-      this.moveToHead(node);
-      return;
-    }
-
-    const node = { key, value, prev: null, next: null };
-    this.map.set(key, node);
-    this.addToHead(node);
-
-    if (this.map.size > this.capacity) {
-      const oldest = this.tail.prev;
-      this.removeNode(oldest);
-      this.map.delete(oldest.key);
-    }
+  removeTail() {
+    const node = this.tail.prev;
+    this.removeNode(node);
+    return node;
   }
 }
 
 module.exports = { LRUCache };
 ```
 
-完整文件：[solution.js](solution.js)。提交 LeetCode 时删除最后的 `module.exports` 即可。
-
-### get / put 是怎么组合出来的？
-
-- `get`：Map 找到节点 → `moveToHead` → 返回 value。
-- `put` 已存在：更新 value → `moveToHead`。
-- `put` 不存在：创建普通对象节点 → 写 Map → `addToHead` → 如果超容量，删除 `tail.prev`，同时 `map.delete(oldest.key)`。
-
-**不变量：** Map 里每个 key 都对应链表中的一个真实节点；从 head 到 tail 永远按「最新 → 最旧」排列。
+[独立源码 solution.js](solution.js)。在 LeetCode 提交时删除最后一行 `module.exports`；其余代码可直接提交。
 
 ## 6. 复杂度对比
 
