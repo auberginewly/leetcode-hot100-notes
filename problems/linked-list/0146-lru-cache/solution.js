@@ -1,24 +1,14 @@
-class Node {
-  constructor(key, value) {
-    this.key = key;
-    this.value = value;
-    this.prev = null;
-    this.next = null;
-  }
-}
-
+// 双向链表节点用普通对象即可，不必额外定义 Node / ListNode 类。
 class LRUCache {
   constructor(capacity) {
     this.capacity = capacity;
     this.map = new Map();
-    // 虚拟头尾节点避免对空链表写特殊分支。
-    this.head = new Node(null, null);
-    this.tail = new Node(null, null);
+    this.head = { key: null, value: null, prev: null, next: null };
+    this.tail = { key: null, value: null, prev: null, next: null };
     this.head.next = this.tail;
     this.tail.prev = this.head;
   }
 
-  // 最新使用的节点永远紧跟 head。
   addToHead(node) {
     node.prev = this.head;
     node.next = this.head.next;
@@ -37,28 +27,28 @@ class LRUCache {
   }
 
   get(key) {
+    if (!this.map.has(key)) return -1;
     const node = this.map.get(key);
-    if (!node) return -1;
-    this.moveToHead(node); // 读取也算一次使用。
+    this.moveToHead(node);
     return node.value;
   }
 
   put(key, value) {
-    const existing = this.map.get(key);
-    if (existing) {
-      existing.value = value;
-      this.moveToHead(existing);
+    if (this.map.has(key)) {
+      const node = this.map.get(key);
+      node.value = value;
+      this.moveToHead(node);
       return;
     }
 
-    const node = new Node(key, value);
+    const node = { key, value, prev: null, next: null };
     this.map.set(key, node);
     this.addToHead(node);
 
     if (this.map.size > this.capacity) {
-      const lru = this.tail.prev;
-      this.removeNode(lru);
-      this.map.delete(lru.key);
+      const oldest = this.tail.prev;
+      this.removeNode(oldest);
+      this.map.delete(oldest.key);
     }
   }
 }
