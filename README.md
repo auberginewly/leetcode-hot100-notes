@@ -6,6 +6,8 @@
 
 | 编号 | 题目 | 分类 | 题解 |
 | --- | --- | --- | --- |
+| 20 | 有效的括号 | 栈 | [题解](problems/stack/0020-valid-parentheses/README.md) |
+| 46 | 全排列 | 回溯 | [题解](problems/backtracking/0046-permutations/README.md) |
 | 146 | LRU 缓存 | 链表 / 哈希表 | [题解](problems/linked-list/0146-lru-cache/README.md) |
 
 ## 写作原则
